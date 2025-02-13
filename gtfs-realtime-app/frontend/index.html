@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Vehicle Positions</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+    .autocomplete {
+      position: relative;
+      display: inline-block;
+    }
+    .autocomplete-items {
+      position: absolute;
+      border: 1px solid #d4d4d4;
+      border-bottom: none;
+      border-top: none;
+      z-index: 99;
+      top: 100%;
+      left: 0;
+      right: 0;
+    }
+    .autocomplete-items div {
+      padding: 10px;
+      cursor: pointer;
+      background-color: #fff;
+      border-bottom: 1px solid #d4d4d4;
+    }
+    .autocomplete-items div:hover {
+      background-color: #e9e9e9;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    table, th, td {
+      border: 1px solid #ddd;
+    }
+    th, td {
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <h1>Real-Time Vehicle Positions</h1>
+  <div class="autocomplete">
+    <input type="text" id="source" placeholder="Enter source">
+  </div>
+  <div class="autocomplete">
+    <input type="text" id="destination" placeholder="Enter destination">
+  </div>
+  <button onclick="filterVehicles()">Filter</button>
+
+  <table id="vehicleTable">
+    <thead>
+      <tr>
+        <th>Vehicle ID</th>
+        <th>Route ID</th>
+        <th>Source</th>
+        <th>Destination</th>
+        <th>Real-Time Timestamp</th>
+        <th>Scheduled Departure</th>
+        <th>Scheduled Arrival</th>
+      </tr>
+    </thead>
+    <tbody>
+      <!-- Rows will be populated here -->
+    </tbody>
+  </table>
+
+  <script>
+    let allVehicles = []; // Store all live buses
+
+    // Autocomplete for source and destination inputs
+    const sourceInput = document.getElementById("source");
+    const destinationInput = document.getElementById("destination");
+
+    // Fetch all stops for autocomplete
+    async function fetchStops() {
+      try {
+        const response = await fetch("http://localhost:3000/api/stops");
+        if (!response.ok) {
+          throw new Error("Failed to fetch stops");
+        }
+        const stops = await response.json();
+        return stops.map((stop) => stop.stop_name);
+      } catch (error) {
+        console.error("Error fetching stops:", error);
+        return [];
+      }
+    }
+
+    // Fetch all live buses
+    async function fetchAllVehicles() {
+      try {
+        const response = await fetch("http://localhost:3000/api/vehicle-positions");
+        if (!response.ok) {
+          throw new Error("Failed to fetch vehicle positions");
+        }
+        const data = await response.json();
+        allVehicles = data; // Store all live buses
+        displayVehicles(data); // Display all buses by default
+      } catch (error) {
+        console.error("Error fetching vehicle positions:", error);
+      }
+    }
+
+    // Display vehicles in the table
+    function displayVehicles(vehicles) {
+      const tableBody = document.querySelector("#vehicleTable tbody");
+      tableBody.innerHTML = vehicles
+        .map(
+          (vehicle) => `
+            <tr>
+              <td>${vehicle.vehicleId}</td>
+              <td>${vehicle.routeId}</td>
+              <td>${vehicle.source}</td>
+              <td>${vehicle.destination}</td>
+              <td>${vehicle.realTimeTimestamp}</td>
+              <td>${vehicle.scheduledDepartureTime}</td>
+              <td>${vehicle.scheduledArrivalTime}</td>
+            </tr>
+          `
+        )
+        .join("");
+    }
+
+    // Filter vehicles based on source and destination
+    function filterVehicles() {
+      const source = sourceInput.value.toLowerCase();
+      const destination = destinationInput.value.toLowerCase();
+
+      const filteredVehicles = allVehicles.filter(
+        (vehicle) =>
+          vehicle.source.toLowerCase().includes(source) &&
+          vehicle.destination.toLowerCase().includes(destination)
+      );
+
+      displayVehicles(filteredVehicles);
+    }
+
+    // Setup autocomplete for source and destination inputs
+    async function setupAutocomplete() {
+      const stops = await fetchStops();
+      setupAutocompleteInput(sourceInput, stops);
+      setupAutocompleteInput(destinationInput, stops);
+    }
+
+    // Helper function to setup autocomplete for an input
+    function setupAutocompleteInput(input, suggestions) {
+      input.addEventListener("input", () => {
+        const value = input.value.toLowerCase();
+        const filteredSuggestions = suggestions.filter((suggestion) =>
+          suggestion.toLowerCase().includes(value)
+        );
+        showAutocomplete(input, filteredSuggestions);
+      });
+    }
+
+    // Show autocomplete suggestions
+    function showAutocomplete(input, suggestions) {
+      const container = input.parentElement;
+      let autocompleteList = container.querySelector(".autocomplete-items");
+      if (!autocompleteList) {
+        autocompleteList = document.createElement("div");
+        autocompleteList.className = "autocomplete-items";
+        container.appendChild(autocompleteList);
+      }
+      autocompleteList.innerHTML = suggestions
+        .map((suggestion) => `<div>${suggestion}</div>`)
+        .join("");
+      autocompleteList.querySelectorAll("div").forEach((item) => {
+        item.addEventListener("click", () => {
+          input.value = item.textContent;
+          autocompleteList.innerHTML = "";
+        });
+      });
+    }
+
+    // Initialize the page
+    async function initialize() {
+      await setupAutocomplete(); // Setup autocomplete
+      await fetchAllVehicles(); // Fetch and display all live buses
+    }
+
+    // Run the initialization when the page loads
+    initialize();
+  </script>
+</body>
+</html>
